@@ -56,6 +56,7 @@
   <input id="c-code" placeholder="Code d'accès" autocomplete="off" required>
   <input id="c-nom" placeholder="Ton prénom" required>
   <button class="plein">Entrer</button>
+  <p id="refus" class="alerte"></p>
 </form>
 
 <div id="app" hidden>
@@ -81,6 +82,7 @@ const memo = {
   set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
 };
 let confs = [];
+let moi = { role: "Opérateur", salles: [] };
 let ouverte = memo.get("ouverte");
 
 function dire(texte, erreur) {
@@ -92,17 +94,19 @@ function dire(texte, erreur) {
 async function api(chemin, methode = "GET", corps) {
   const r = await fetch("/api/" + chemin, {
     method: methode,
-    headers: { "Content-Type": "application/json", "x-studios-code": memo.get("code") },
+    headers: { "Content-Type": "application/json", "x-studios-code": memo.get("code"), "x-studios-prenom": encodeURIComponent(memo.get("nom")) },
     body: corps ? JSON.stringify(corps) : undefined,
   });
   const j = await r.json().catch(() => ({}));
-  if (r.status === 401) { memo.set("code", ""); location.reload(); }
+  // Code ou prénom refusé : retour à l'écran d'entrée avec le message.
+  if (r.status === 401 || r.status === 403) { memo.set(r.status === 401 ? "code" : "nom", ""); memo.set("refus", j.erreur || ""); location.reload(); }
   if (!r.ok) throw new Error(j.erreur || "Erreur " + r.status);
   return j;
 }
 
 async function charger() {
-  try { confs = await api("conferences"); } catch (e) { return dire(e.message, true); }
+  try { ({ moi, conferences: confs } = await api("conferences")); } catch (e) { return dire(e.message, true); }
+  $("#qui").textContent = moi.prenom + " · " + (moi.role === "Monteur" ? "monteur" : moi.salles.map((s) => s.replace("Salle de conférences ", "")).join(", "));
   remplirFiltres(); afficher();
 }
 
@@ -122,6 +126,8 @@ function remplirFiltres() {
   if (jours.includes(auj) && !memo.get("jour")) $("#f-jour").value = auj;
   const theatres = [...new Set(duSalon.map((c) => c["Théâtre"]).filter(Boolean))].sort();
   const choisi = memo.get("theatre");
+  $("#f-theatres").hidden = theatres.length < 2;
+  if (!theatres.includes(choisi)) memo.set("theatre", "");
   $("#f-theatres").innerHTML = ["", ...theatres].map((t) =>
     `<button class="puce${t === choisi ? " actif" : ""}" data-t="${t}">${t ? t.replace("Salle de conférences ", "") : "Tous"}</button>`).join("");
 }
@@ -172,13 +178,13 @@ function carte(c) {
       <h3>Remarques pour le monteur</h3>
       <textarea data-champ="Notes opérateur" placeholder="Une remarque par ligne, timecode en tête :&#10;15:00 son coupé, raccord&#10;Pas de son les 2 premières minutes">${echapper(c["Notes opérateur"])}</textarea>
       <div class="ligne"><button class="plein" data-action="notes">Enregistrer les remarques</button></div>
-      <h3>Montage</h3>
+      ${moi.role === "Monteur" ? `<h3>Montage</h3>
       <div class="ligne">
         <button data-action="statut" data-s="Monté">✓ Monté</button>
         <button data-action="statut" data-s="Livré">Livré</button>
         <button data-action="statut" data-s="À monter">Remettre à monter</button>
       </div>
-      ${c["Monté par"] ? `<p class="heure">Monté par ${echapper(c["Monté par"])} le ${echapper(c["Monté le"])}</p>` : ""}
+      ${c["Monté par"] ? `<p class="heure">Monté par ${echapper(c["Monté par"])} le ${echapper(c["Monté le"])}</p>` : ""}` : ""}
       ${c["À vérifier"] ? `<p class="alerte">${echapper(c["À vérifier"])}</p>` : ""}
     </div>
   </details>`;
@@ -234,6 +240,7 @@ $("#connexion").addEventListener("submit", (e) => {
   demarrer();
 });
 function demarrer() {
+  $("#refus").textContent = memo.get("refus"); memo.set("refus", "");
   const connecte = memo.get("code") && memo.get("nom");
   $("#connexion").hidden = !!connecte; $("#app").hidden = !connecte;
   if (connecte) { $("#qui").textContent = memo.get("nom"); charger(); }

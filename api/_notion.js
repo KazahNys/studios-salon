@@ -2,6 +2,7 @@
 const VERSION = "2022-06-28";
 const CONFS = process.env.NOTION_DB_CONFERENCES;
 const INTERS = process.env.NOTION_DB_INTERVENANTS;
+const EQUIPE = process.env.NOTION_DB_EQUIPE;
 
 async function notion(chemin, methode = "GET", corps) {
   for (let essai = 0; ; essai++) {
@@ -43,6 +44,7 @@ function lire(p) {
     if (v.type === "title" || v.type === "rich_text") o[nom] = v[v.type].map((t) => t.plain_text).join("");
     else if (v.type === "checkbox") o[nom] = v.checkbox;
     else if (v.type === "select") o[nom] = v.select ? v.select.name : "";
+    else if (v.type === "multi_select") o[nom] = v.multi_select.map((x) => x.name);
     else if (v.type === "date") o[nom] = v.date ? v.date.start : "";
     else if (v.type === "number") o[nom] = v.number;
     else if (v.type === "relation") o[nom] = v.relation.map((x) => x.id);
@@ -75,11 +77,21 @@ const creer = (db, valeurs) => notion("pages", "POST", { parent: { database_id: 
 const modifier = (id, valeurs) => notion("pages/" + id, "PATCH", { properties: ecrire(valeurs) });
 const archiver = (id) => notion("pages/" + id, "PATCH", { archived: true });
 
-/* Code d'accès partagé, comme le tableau de prospection. */
-function autorise(req, res) {
-  if (req.headers["x-studios-code"] === process.env.STUDIOS_CODE) return true;
-  res.status(401).json({ erreur: "Code d'accès incorrect" });
-  return false;
+/* Code d'accès partagé + prénom inscrit dans la base Équipe.
+   Renvoie {prenom, role, salles} ou null (réponse d'erreur déjà envoyée). */
+async function autorise(req, res) {
+  if (req.headers["x-studios-code"] !== process.env.STUDIOS_CODE) {
+    res.status(401).json({ erreur: "Code d'accès incorrect" });
+    return null;
+  }
+  const { cle } = require("../regles");
+  const prenom = decodeURIComponent(req.headers["x-studios-prenom"] || "");
+  const qui = (await tout(EQUIPE)).map(lire).find((e) => cle(e["Prénom"]) === cle(prenom));
+  if (!prenom || !qui) {
+    res.status(403).json({ erreur: `Prénom « ${prenom} » inconnu : demande à Yanis de t'ajouter dans l'équipe.` });
+    return null;
+  }
+  return { prenom: qui["Prénom"], role: qui["Rôle"] || "Opérateur", salles: qui.Salles || [] };
 }
 
 /* Toute modification sur place d'une conférence déjà montée la renvoie au monteur. */

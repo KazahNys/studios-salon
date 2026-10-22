@@ -5,8 +5,8 @@ const { creer, modifier, autorise, aRefaire, INTERS } = require("./_notion");
 const MODIFIABLES = ["Présent", "Nom", "Fonction", "Entreprise"];
 
 module.exports = async (req, res) => {
-  if (!autorise(req, res)) return;
   try {
+    if (!(await autorise(req, res))) return;
     const { id, confId, code, ...valeurs } = req.body || {};
     const refuses = Object.keys(valeurs).filter((k) => !MODIFIABLES.includes(k));
     if (!confId || refuses.length) return res.status(400).json({ erreur: "Requête incomplète ou champ non modifiable" });

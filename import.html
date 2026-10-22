@@ -24,6 +24,8 @@
   <p>Relançable autant de fois que nécessaire : on met à jour ce qui vient de l'Excel, on ne touche jamais aux présences, ajouts, remarques, statuts de montage ni aux titres corrigés à la main.</p>
   <label for="code">Code d'accès</label>
   <input id="code" autocomplete="off">
+  <label for="prenom">Ton prénom (monteur)</label>
+  <input id="prenom" value="Yanis">
   <label for="salon">Nom du salon (sert à séparer l'essai du vrai)</label>
   <input id="salon" value="Learning Tech 2026 (essai)">
   <label for="fichier">Fichier Excel</label>
@@ -43,7 +45,7 @@ let confs = [];
 const ecrire = (t) => ($("#rapport").textContent = t);
 
 async function api(corps) {
-  const r = await fetch("/api/import", { method: "POST", headers: { "Content-Type": "application/json", "x-studios-code": $("#code").value.trim() }, body: JSON.stringify(corps) });
+  const r = await fetch("/api/import", { method: "POST", headers: { "Content-Type": "application/json", "x-studios-code": $("#code").value.trim(), "x-studios-prenom": encodeURIComponent($("#prenom").value.trim()) }, body: JSON.stringify(corps) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.erreur || "Erreur " + r.status);
   return j;

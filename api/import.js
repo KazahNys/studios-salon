@@ -49,7 +49,9 @@ async function importerConference(salon, c) {
 }
 
 module.exports = async (req, res) => {
-  if (!autorise(req, res)) return;
+  const moi = await autorise(req, res);
+  if (!moi) return;
+  if (moi.role !== "Monteur") return res.status(403).json({ erreur: "Import réservé aux monteurs" });
   const { action, salon } = req.body || {};
   if (req.method !== "POST" || !salon) return res.status(400).json({ erreur: "salon manquant" });
   try {

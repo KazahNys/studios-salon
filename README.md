@@ -16,10 +16,15 @@ Pas de build, pas de framework, aucune dépendance npm.
 
 ## Variables d'environnement Vercel
 
-- `NOTION_TOKEN` : jeton de l'intégration Notion (la même que le tableau de prospection convient)
+- `NOTION_TOKEN` : jeton de l'intégration Notion (intégration dédiée « Studio S », connectée à la page Studio S)
 - `NOTION_DB_CONFERENCES` : `aad41919954f464a80fba09025a9c2b6`
 - `NOTION_DB_INTERVENANTS` : `24fa7ccbd70f4e0db797372377f719ca`
+- `NOTION_DB_EQUIPE` : `e69787f084cd49d7944b77f3424a6d7e`
 - `STUDIOS_CODE` : code d'accès partagé donné aux opérateurs
+
+## Qui voit quoi
+
+Base Notion « Équipe » : un prénom, un rôle, des salles. Un opérateur ne voit que ses salles ; un monteur voit tout et peut importer. Un prénom absent de la base est refusé. Se remplit dans Notion, sans redéployer.
 
 Redéployer après tout changement de variable. L'intégration Notion doit être connectée à la page Studio S (••• › Connexions).
 
