@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio S — Salon</title>
+<style>
+  :root {
+    --fond: #111318; --carte: #1b1e25; --ligne: #2c303a; --texte: #eef0f4; --gris: #a3a9b6;
+    --violet: #7b3fa0; --vert: #2f9e63; --orange: #d9822b; --bleu: #3b7dd8; --rouge: #c94a4a;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; font: 16px/1.4 system-ui, sans-serif; background: var(--fond); color: var(--texte); }
+  header { position: sticky; top: 0; z-index: 2; background: var(--fond); padding: 12px 16px 8px; border-bottom: 1px solid var(--ligne); }
+  h1 { font-size: 18px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  h1 small { font-weight: 400; color: var(--gris); font-size: 14px; }
+  main { padding: 12px 16px 80px; max-width: 760px; margin: 0 auto; }
+  .filtres { display: flex; flex-wrap: wrap; gap: 6px; }
+  select, input, textarea, button { font: inherit; color: inherit; }
+  select, input, textarea { background: var(--carte); border: 1px solid var(--ligne); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  textarea { width: 100%; min-height: 84px; resize: vertical; }
+  button { background: var(--carte); border: 1px solid var(--ligne); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+  button.plein { background: var(--violet); border-color: var(--violet); font-weight: 600; }
+  button:disabled { opacity: .5; }
+  .puce { border-radius: 999px; padding: 6px 12px; }
+  .puce.actif { background: var(--violet); border-color: var(--violet); }
+  .conf { background: var(--carte); border: 1px solid var(--ligne); border-radius: 12px; margin: 10px 0; overflow: hidden; }
+  .conf > summary { list-style: none; padding: 12px 14px; cursor: pointer; display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: start; }
+  .conf > summary::-webkit-details-marker { display: none; }
+  .heure { color: var(--gris); font-variant-numeric: tabular-nums; }
+  .code { font-weight: 700; font-size: 20px; letter-spacing: .5px; }
+  .titre { grid-column: 1 / -1; }
+  .statut { font-size: 13px; padding: 2px 8px; border-radius: 999px; background: var(--ligne); white-space: nowrap; }
+  .statut[data-s="Monté"] { background: var(--vert); } .statut[data-s="À refaire"] { background: var(--orange); } .statut[data-s="Livré"] { background: var(--bleu); }
+  .corps { padding: 0 14px 14px; border-top: 1px solid var(--ligne); }
+  .corps h3 { font-size: 14px; color: var(--gris); text-transform: uppercase; letter-spacing: .5px; margin: 14px 0 6px; }
+  .inter { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--ligne); }
+  .inter.absent .qui { text-decoration: line-through; color: var(--gris); }
+  .inter input[type=checkbox] { width: 26px; height: 26px; accent-color: var(--vert); }
+  .qui b { display: block; } .qui span { color: var(--gris); font-size: 14px; }
+  .edition { grid-column: 1 / -1; display: none; gap: 6px; flex-direction: column; }
+  .inter.edite .edition { display: flex; }
+  .ajout { display: grid; gap: 6px; margin-top: 8px; }
+  .ligne { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .alerte { color: var(--orange); font-size: 13px; }
+  .message { position: fixed; left: 16px; right: 16px; bottom: 16px; max-width: 728px; margin: 0 auto; padding: 12px 14px; border-radius: 10px; background: var(--vert); display: none; }
+  .message.erreur { background: var(--rouge); }
+  #connexion { max-width: 380px; margin: 15vh auto; padding: 0 16px; display: grid; gap: 10px; }
+  .vide { color: var(--gris); text-align: center; margin: 40px 0; }
+</style>
+</head>
+<body>
+<form id="connexion" hidden>
+  <h1>Studio S</h1>
+  <input id="c-code" placeholder="Code d'accès" autocomplete="off" required>
+  <input id="c-nom" placeholder="Ton prénom" required>
+  <button class="plein">Entrer</button>
+</form>
+
+<div id="app" hidden>
+  <header>
+    <h1>Studio S <small id="qui"></small></h1>
+    <div class="filtres">
+      <select id="f-salon" aria-label="Salon"></select>
+      <select id="f-jour" aria-label="Jour"></select>
+      <input id="f-cherche" type="search" placeholder="Code ou titre" style="flex:1">
+    </div>
+    <div class="filtres" id="f-theatres" style="margin-top:6px"></div>
+  </header>
+  <main id="liste"></main>
+</div>
+<div class="message" id="message"></div>
+
+<script>
+/* Une seule page pour les opérateurs (présents, ajouts, remarques) et les monteurs (statut).
+   Tout part dans Notion par /api ; la liste se recharge toute seule chaque minute. */
+const $ = (s) => document.querySelector(s);
+const memo = {
+  get: (k) => { try { return localStorage.getItem(k) || ""; } catch { return ""; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
+};
+let confs = [];
+let ouverte = memo.get("ouverte");
+
+function dire(texte, erreur) {
+  const m = $("#message");
+  m.textContent = texte; m.className = "message" + (erreur ? " erreur" : ""); m.style.display = "block";
+  clearTimeout(dire.t); dire.t = setTimeout(() => (m.style.display = "none"), erreur ? 6000 : 2000);
+}
+
+async function api(chemin, methode = "GET", corps) {
+  const r = await fetch("/api/" + chemin, {
+    method: methode,
+    headers: { "Content-Type": "application/json", "x-studios-code": memo.get("code") },
+    body: corps ? JSON.stringify(corps) : undefined,
+  });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { memo.set("code", ""); location.reload(); }
+  if (!r.ok) throw new Error(j.erreur || "Erreur " + r.status);
+  return j;
+}
+
+async function charger() {
+  try { confs = await api("conferences"); } catch (e) { return dire(e.message, true); }
+  remplirFiltres(); afficher();
+}
+
+function options(sel, valeurs, cle, tous) {
+  const actuel = memo.get(cle) || sel.value;
+  sel.innerHTML = (tous ? `<option value="">${tous}</option>` : "") + valeurs.map((v) => `<option>${v}</option>`).join("");
+  sel.value = valeurs.includes(actuel) ? actuel : tous ? "" : valeurs[valeurs.length - 1] || "";
+}
+
+function remplirFiltres() {
+  const uniques = (f) => [...new Set(confs.map(f).filter(Boolean))].sort();
+  options($("#f-salon"), uniques((c) => c.Salon), "salon");
+  const duSalon = confs.filter((c) => c.Salon === $("#f-salon").value);
+  const jours = [...new Set(duSalon.map((c) => c.Date).filter(Boolean))].sort();
+  const auj = new Date().toISOString().slice(0, 10);
+  options($("#f-jour"), jours, "jour", "Tous les jours");
+  if (jours.includes(auj) && !memo.get("jour")) $("#f-jour").value = auj;
+  const theatres = [...new Set(duSalon.map((c) => c["Théâtre"]).filter(Boolean))].sort();
+  const choisi = memo.get("theatre");
+  $("#f-theatres").innerHTML = ["", ...theatres].map((t) =>
+    `<button class="puce${t === choisi ? " actif" : ""}" data-t="${t}">${t ? t.replace("Salle de conférences ", "") : "Tous"}</button>`).join("");
+}
+
+const echapper = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function afficher() {
+  const salon = $("#f-salon").value, jour = $("#f-jour").value, theatre = memo.get("theatre");
+  const q = $("#f-cherche").value.trim().toLowerCase();
+  const liste = confs.filter((c) => c.Salon === salon && (!jour || c.Date === jour) && (!theatre || c["Théâtre"] === theatre)
+    && (!q || (c.Code + " " + c.Titre).toLowerCase().includes(q)));
+  $("#liste").innerHTML = liste.length ? liste.map(carte).join("") : `<p class="vide">Aucune conférence pour ces filtres.</p>`;
+}
+
+function carte(c) {
+  const s = c["Statut montage"] || "À monter";
+  const inters = c.intervenants.map((i) => `
+    <div class="inter${i["Présent"] ? "" : " absent"}" data-id="${i.id}">
+      <input type="checkbox" data-action="present" ${i["Présent"] ? "checked" : ""} aria-label="Présent">
+      <div class="qui"><b>${echapper(i.Nom)}${i["Modérateur"] ? " · modérateur" : ""}${i["Ajouté sur place"] ? " · ajouté" : ""}</b>
+        <span>${echapper([i.Fonction, i.Entreprise].filter(Boolean).join(" · ") || "fonction et entreprise à compléter")}</span>
+        ${i["À vérifier"] ? `<div class="alerte">${echapper(i["À vérifier"])}</div>` : ""}</div>
+      <button data-action="editer">Corriger</button>
+      <div class="edition">
+        <input data-champ="Nom" value="${echapper(i.Nom)}" placeholder="Prénom NOM">
+        <input data-champ="Fonction" value="${echapper(i.Fonction)}" placeholder="Fonction">
+        <input data-champ="Entreprise" value="${echapper(i.Entreprise)}" placeholder="Entreprise">
+        <button class="plein" data-action="corriger">Enregistrer</button>
+      </div>
+    </div>`).join("");
+  return `
+  <details class="conf" data-id="${c.id}" data-code="${echapper(c.Code)}" ${c.id === ouverte ? "open" : ""}>
+    <summary>
+      <span class="heure">${echapper(c["Début"])}–${echapper(c.Fin)}</span>
+      <span class="code">${echapper(c.Code)}</span>
+      <span class="statut" data-s="${s}">${s}</span>
+      <span class="titre">${echapper(c["Titre à l'écran"] || c.Titre)}</span>
+    </summary>
+    <div class="corps">
+      <h3>Intervenants — décoche les absents</h3>
+      ${inters || `<p class="vide">Aucun intervenant</p>`}
+      <div class="ajout">
+        <input data-champ="Nom" placeholder="Ajouter : Prénom NOM">
+        <input data-champ="Fonction" placeholder="Fonction">
+        <input data-champ="Entreprise" placeholder="Entreprise">
+        <button data-action="ajouter">+ Ajouter l'intervenant</button>
+      </div>
+      <h3>Remarques pour le monteur</h3>
+      <textarea data-champ="Notes opérateur" placeholder="Une remarque par ligne, timecode en tête :&#10;15:00 son coupé, raccord&#10;Pas de son les 2 premières minutes">${echapper(c["Notes opérateur"])}</textarea>
+      <div class="ligne"><button class="plein" data-action="notes">Enregistrer les remarques</button></div>
+      <h3>Montage</h3>
+      <div class="ligne">
+        <button data-action="statut" data-s="Monté">✓ Monté</button>
+        <button data-action="statut" data-s="Livré">Livré</button>
+        <button data-action="statut" data-s="À monter">Remettre à monter</button>
+      </div>
+      ${c["Monté par"] ? `<p class="heure">Monté par ${echapper(c["Monté par"])} le ${echapper(c["Monté le"])}</p>` : ""}
+      ${c["À vérifier"] ? `<p class="alerte">${echapper(c["À vérifier"])}</p>` : ""}
+    </div>
+  </details>`;
+}
+
+/* ---- Actions --------------------------------------------------------- */
+document.addEventListener("click", async (e) => {
+  const puce = e.target.closest(".puce");
+  if (puce) { memo.set("theatre", puce.dataset.t); remplirFiltres(); return afficher(); }
+  const b = e.target.closest("[data-action]");
+  if (!b || b.dataset.action === "present") return;
+  const carteEl = b.closest(".conf"), confId = carteEl.dataset.id, code = carteEl.dataset.code;
+  const ligne = b.closest(".inter");
+  const champs = (el) => Object.fromEntries([...el.querySelectorAll("[data-champ]")].map((i) => [i.dataset.champ, i.value.trim()]));
+  if (b.dataset.action === "editer") return ligne.classList.toggle("edite");
+  b.disabled = true;
+  try {
+    if (b.dataset.action === "corriger") await api("intervenants", "PATCH", { id: ligne.dataset.id, confId, ...champs(ligne.querySelector(".edition")) });
+    if (b.dataset.action === "ajouter") {
+      const v = champs(b.closest(".ajout"));
+      if (!v.Nom) throw new Error("Le nom est obligatoire");
+      await api("intervenants", "POST", { confId, code, ...v });
+    }
+    if (b.dataset.action === "notes") await api("conferences", "PATCH", { id: confId, "Notes opérateur": carteEl.querySelector("textarea").value });
+    if (b.dataset.action === "statut") {
+      const s = b.dataset.s, faitLe = s === "À monter" ? null : new Date().toISOString().slice(0, 10);
+      await api("conferences", "PATCH", { id: confId, "Statut montage": s, ...(s === "Monté" ? { "Monté par": memo.get("nom"), "Monté le": faitLe } : {}) });
+    }
+    dire("Enregistré ✓");
+    await charger();
+  } catch (err) { dire(err.message, true); b.disabled = false; }
+});
+
+document.addEventListener("change", async (e) => {
+  if (e.target.dataset.action === "present") {
+    const ligne = e.target.closest(".inter"), confId = e.target.closest(".conf").dataset.id;
+    ligne.classList.toggle("absent", !e.target.checked);
+    try { await api("intervenants", "PATCH", { id: ligne.dataset.id, confId, Présent: e.target.checked }); dire(e.target.checked ? "Présent ✓" : "Marqué absent"); }
+    catch (err) { e.target.checked = !e.target.checked; ligne.classList.toggle("absent"); dire(err.message, true); }
+  }
+  if (e.target.id === "f-salon") { memo.set("salon", e.target.value); memo.set("jour", ""); remplirFiltres(); afficher(); }
+  if (e.target.id === "f-jour") { memo.set("jour", e.target.value); afficher(); }
+});
+document.addEventListener("toggle", (e) => { if (e.target.open) memo.set("ouverte", (ouverte = e.target.dataset.id)); }, true);
+$("#f-cherche").addEventListener("input", afficher);
+
+/* Recharge chaque minute, sauf si quelqu'un est en train d'écrire. */
+setInterval(() => { if (!document.activeElement.matches("input, textarea")) charger(); }, 60000);
+
+$("#connexion").addEventListener("submit", (e) => {
+  e.preventDefault();
+  memo.set("code", $("#c-code").value.trim()); memo.set("nom", $("#c-nom").value.trim());
+  demarrer();
+});
+function demarrer() {
+  const connecte = memo.get("code") && memo.get("nom");
+  $("#connexion").hidden = !!connecte; $("#app").hidden = !connecte;
+  if (connecte) { $("#qui").textContent = memo.get("nom"); charger(); }
+}
+demarrer();
+</script>
+</body>
+</html>

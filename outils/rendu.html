@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+  /* Les cotes ci-dessous sont celles du carton LT France (1920 × 1080).
+     Si ton rectangle violet change de taille dans Premiere, change-les ici. */
+  :root {
+    --violet: #5c136b;
+    --noir: #111;
+    --titre-x: 46px; --titre-y: 354px; --titre-l: 1840px; --titre-h: 377px;
+    --titre-marge-x: 60px; --titre-marge-y: 40px;
+    --synthe-x: 96px; --synthe-y: 806px;
+  }
+  @font-face { font-family: M; font-weight: 500; src: url(polices/montserrat-latin-500-normal.woff2); }
+  @font-face { font-family: M; font-weight: 600; src: url(polices/montserrat-latin-600-normal.woff2); }
+  @font-face { font-family: M; font-weight: 700; src: url(polices/montserrat-latin-700-normal.woff2); }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
+  body { font-family: M, sans-serif; color: #fff; position: relative; }
+  body.apercu { background: center / cover var(--fond, #333); }
+  .boite { position: absolute; box-sizing: border-box; }
+  .fond { background: transparent; }
+  /* Synthé : un rectangle par ligne, dans le PNG. Titre : texte seul (le rectangle est animé dans Premiere),
+     le rectangle n'apparaît que dans l'aperçu. */
+  #synthe .violet, body.apercu .violet { background: var(--violet); }
+  #synthe .noir { background: var(--noir); }
+
+  #titre { left: var(--titre-x); top: var(--titre-y); width: var(--titre-l); height: var(--titre-h);
+           padding: var(--titre-marge-y) var(--titre-marge-x); display: flex; align-items: center; justify-content: center; }
+  #titre p { margin: 0; font-weight: 600; line-height: 1.22; text-align: center; text-wrap: balance; }
+
+  #synthe { left: var(--synthe-x); top: var(--synthe-y); }
+  #synthe > div { width: max-content; white-space: nowrap; }
+  #nom { padding: 14px 30px 12px; font-weight: 700; }
+  #fonction, #entreprise { padding: 10px 30px 11px; font-weight: 500; line-height: 1.25; }
+  #entreprise { font-weight: 600; }
+</style>
+</head>
+<body>
+  <div id="titre" class="boite fond violet" hidden><p></p></div>
+  <div id="synthe" class="boite" hidden>
+    <div id="nom" class="fond violet"></div>
+    <div id="fonction" class="fond noir"></div>
+    <div id="entreprise" class="fond noir"></div>
+  </div>
+<script src="conferences.js"></script>
+<script>
+/* Remplit le carton demandé et réduit la taille jusqu'à ce que ça rentre.
+   Renvoie un compte rendu (taille retenue, nombre de lignes, débordement). */
+function lignes(el) {
+  const h = parseFloat(getComputedStyle(el).lineHeight);
+  return Math.round(el.getBoundingClientRect().height / h);
+}
+
+function rendreTitre(texte) {
+  const boite = document.getElementById("titre"), p = boite.querySelector("p");
+  boite.hidden = false;
+  p.textContent = texte;
+  const place = { l: boite.clientWidth - 120, h: boite.clientHeight - 80 };
+  // 3 lignes maxi de 60 px à 44 px, puis 4 lignes jusqu'à 38 px en dernier recours.
+  for (const [maxLignes, de, a] of [[3, 60, 44], [4, 43, 38]]) {
+    for (let t = de; t >= a; t--) {
+      p.style.fontSize = t + "px";
+      if (lignes(p) <= maxLignes && p.scrollWidth <= place.l && p.getBoundingClientRect().height <= place.h)
+        return { taille: t, lignes: lignes(p), deborde: false };
+    }
+  }
+  return { taille: 38, lignes: lignes(p), deborde: true };
+}
+
+function ajuster(el, de, a, largeurMax) {
+  for (let t = de; t >= a; t--) {
+    el.style.fontSize = t + "px";
+    if (el.scrollWidth <= largeurMax) return { taille: t, deborde: false };
+  }
+  return { taille: a, deborde: true };
+}
+
+function rendreSynthe(p) {
+  const LARGEUR = 1100; // au-delà, le synthé mange trop l'image
+  document.getElementById("synthe").hidden = false;
+  const r = {};
+  for (const [champ, de, a] of [["nom", 48, 36], ["fonction", 32, 24], ["entreprise", 32, 24]]) {
+    const el = document.getElementById(champ);
+    el.textContent = p[champ] || "";
+    el.hidden = !p[champ];
+    r[champ] = ajuster(el, de, a, LARGEUR);
+  }
+  return r;
+}
+
+/* rendu.html?code=B11400&carton=titre            -> titre de la conférence
+   rendu.html?code=B11400&carton=synthe&n=2       -> 2e intervenant présent
+   &apercu=1 : sur fond_apercu.png, avec le rectangle du titre */
+const q = new URLSearchParams(location.search);
+if (q.get("code")) {
+  const c = CONFS.find((x) => x.code === q.get("code"));
+  if (q.get("apercu")) document.body.className = "apercu";
+  if (q.get("apercu")) document.body.style.setProperty("--fond", "url(fond_apercu.png)");
+  document.fonts.ready.then(() => {
+    document.title = JSON.stringify(q.get("carton") === "titre"
+      ? rendreTitre(c.titre_ecran || c.titre)
+      : rendreSynthe(c.intervenants.filter((i) => i.present !== false)[Number(q.get("n") || 1) - 1] || {}));
+  });
+}
+</script>
+</body>
+</html>

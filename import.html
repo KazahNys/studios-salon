@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio S — Import</title>
+<style>
+  body { margin: 0; font: 16px/1.45 system-ui, sans-serif; background: #111318; color: #eef0f4; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p { color: #a3a9b6; }
+  label { display: block; margin: 14px 0 4px; font-weight: 600; }
+  input, button { font: inherit; color: inherit; background: #1b1e25; border: 1px solid #2c303a; border-radius: 8px; padding: 9px 12px; width: 100%; box-sizing: border-box; }
+  button { width: auto; cursor: pointer; margin: 14px 8px 0 0; }
+  button.plein { background: #7b3fa0; border-color: #7b3fa0; font-weight: 600; }
+  button.danger { border-color: #c94a4a; color: #f1a3a3; }
+  progress { width: 100%; height: 14px; margin-top: 14px; }
+  pre { background: #1b1e25; border-radius: 8px; padding: 12px; white-space: pre-wrap; font-size: 13px; max-height: 50vh; overflow: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Import de l'Excel du salon</h1>
+  <p>Relançable autant de fois que nécessaire : on met à jour ce qui vient de l'Excel, on ne touche jamais aux présences, ajouts, remarques, statuts de montage ni aux titres corrigés à la main.</p>
+  <label for="code">Code d'accès</label>
+  <input id="code" autocomplete="off">
+  <label for="salon">Nom du salon (sert à séparer l'essai du vrai)</label>
+  <input id="salon" value="Learning Tech 2026 (essai)">
+  <label for="fichier">Fichier Excel</label>
+  <input id="fichier" type="file" accept=".xlsx,.xls">
+  <button class="plein" id="lire">1 · Lire l'Excel</button>
+  <button id="envoyer" disabled>2 · Envoyer dans Notion</button>
+  <button class="danger" id="vider">Vider ce salon</button>
+  <progress id="avance" value="0" max="1" hidden></progress>
+  <pre id="rapport">—</pre>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="regles.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+try { $("#code").value = localStorage.getItem("code") || ""; } catch {}
+let confs = [];
+const ecrire = (t) => ($("#rapport").textContent = t);
+
+async function api(corps) {
+  const r = await fetch("/api/import", { method: "POST", headers: { "Content-Type": "application/json", "x-studios-code": $("#code").value.trim() }, body: JSON.stringify(corps) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.erreur || "Erreur " + r.status);
+  return j;
+}
+
+$("#lire").onclick = async () => {
+  const f = $("#fichier").files[0];
+  if (!f) return ecrire("Choisis d'abord le fichier Excel.");
+  const wb = XLSX.read(await f.arrayBuffer(), { cellDates: true });
+  confs = Regles.lireExcel(wb.SheetNames.map((n) => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true })));
+  const inters = confs.flatMap((c) => c.intervenants.map((i) => ({ ...i, code: c.code })));
+  const aVoir = [...confs.filter((c) => c.alertes.length).map((c) => `${c.code} : ${c.alertes.join(", ")} → « ${c.titre_ecran} »`),
+                 ...inters.filter((i) => i.alertes.length).map((i) => `${i.code} ${i.nom} : ${i.alertes.join(", ")}`)];
+  ecrire(`${confs.length} conférences, ${inters.length} intervenants dans ${wb.SheetNames.length} onglet(s).\n${aVoir.length} point(s) à vérifier (aussi notés dans Notion, colonne « À vérifier ») :\n\n` + aVoir.join("\n"));
+  $("#envoyer").disabled = !confs.length;
+};
+
+$("#envoyer").onclick = async () => {
+  const salon = $("#salon").value.trim();
+  if (!salon) return ecrire("Donne un nom de salon.");
+  try { localStorage.setItem("code", $("#code").value.trim()); } catch {}
+  $("#envoyer").disabled = true;
+  const p = $("#avance"); p.hidden = false; p.max = confs.length + 1; p.value = 0;
+  const erreurs = []; let nouvelles = 0;
+  for (const c of confs) {
+    try { if ((await api({ action: "conference", salon, conf: c })).nouvelle) nouvelles++; }
+    catch (e) { erreurs.push(`${c.code} : ${e.message}`); }
+    p.value++; ecrire(`Envoi… ${p.value}/${confs.length}  (${c.code})`);
+  }
+  let retirees = [];
+  // On ne retire rien si une conférence a échoué : mieux vaut relancer que retirer à tort.
+  if (!erreurs.length) retirees = (await api({ action: "terminer", salon, codes: confs.map((c) => c.code) })).retirees;
+  p.value = p.max;
+  ecrire(`Terminé : ${confs.length - nouvelles} mise(s) à jour, ${nouvelles} nouvelle(s).` +
+    (retirees.length ? `\nRetirées du programme (plus dans l'Excel) : ${retirees.join(", ")}` : "") +
+    (erreurs.length ? `\n\n${erreurs.length} erreur(s) — relance l'import, il reprend sans doublon :\n` + erreurs.join("\n") : ""));
+  $("#envoyer").disabled = false;
+};
+
+$("#vider").onclick = async () => {
+  const salon = $("#salon").value.trim();
+  if (prompt(`Tape VIDER pour archiver toutes les fiches de « ${salon} » (récupérables dans la corbeille Notion).`) !== "VIDER") return;
+  let total = 0;
+  try {
+    for (;;) { const r = await api({ action: "vider", salon }); total += r.archivees; ecrire(`Archivage… ${total} conférence(s)`); if (r.fini) break; }
+    ecrire(`« ${salon} » vidé : ${total} conférence(s) archivée(s) avec leurs intervenants.`);
+  } catch (e) { ecrire("Arrêt : " + e.message + " (relance, ça reprend)"); }
+};
+</script>
+</body>
+</html>
