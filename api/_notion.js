@@ -101,4 +101,4 @@ async function aRefaire(confId) {
   if (c["Statut montage"] === "Monté" || c["Statut montage"] === "Livré") await modifier(confId, { "Statut montage": "À refaire" });
 }
 
-module.exports = { notion, tout, lire, creer, modifier, archiver, autorise, aRefaire, CONFS, INTERS };
+module.exports = { notion, tout, lire, creer, modifier, archiver, autorise, aRefaire, CONFS, INTERS, EQUIPE };
