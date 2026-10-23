@@ -1,8 +1,9 @@
 /* Pont Notion commun aux fonctions. Le jeton reste côté serveur. */
 const VERSION = "2022-06-28";
-const CONFS = process.env.NOTION_DB_CONFERENCES;
-const INTERS = process.env.NOTION_DB_INTERVENANTS;
-const EQUIPE = process.env.NOTION_DB_EQUIPE;
+// Identifiants des bases Notion (pas des secrets : sans le jeton, ils ne donnent accès à rien).
+const CONFS = process.env.NOTION_DB_CONFERENCES || "aad41919954f464a80fba09025a9c2b6";
+const INTERS = process.env.NOTION_DB_INTERVENANTS || "24fa7ccbd70f4e0db797372377f719ca";
+const EQUIPE = process.env.NOTION_DB_EQUIPE || "e69787f084cd49d7944b77f3424a6d7e";
 
 async function notion(chemin, methode = "GET", corps) {
   for (let essai = 0; ; essai++) {

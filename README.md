@@ -16,6 +16,8 @@ Pas de build, pas de framework, aucune dépendance npm.
 
 ## Variables d'environnement Vercel
 
+Obligatoires : `NOTION_TOKEN` et `STUDIOS_CODE`. Les trois identifiants de bases ont une valeur par défaut dans `api/_notion.js` ; les variables ne servent qu'à les remplacer.
+
 - `NOTION_TOKEN` : jeton de l'intégration Notion (intégration dédiée « Studio S », connectée à la page Studio S)
 - `NOTION_DB_CONFERENCES` : `aad41919954f464a80fba09025a9c2b6`
 - `NOTION_DB_INTERVENANTS` : `24fa7ccbd70f4e0db797372377f719ca`
