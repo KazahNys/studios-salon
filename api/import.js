@@ -34,7 +34,7 @@ async function importerConference(salon, c) {
   const vus = new Set();
   for (const [n, i] of c.intervenants.entries()) {
     const valeurs = {
-      Nom: i.nom, Code: c.code, Fonction: i.fonction, Entreprise: i.entreprise, Modérateur: i.chair,
+      Nom: i.nom, "Code conf": c.code, Fonction: i.fonction, Entreprise: i.entreprise, Modérateur: i.chair,
       Ordre: n + 1, "À vérifier": i.alertes.join(" · "), "Retiré du programme": false,
     };
     const trouve = deja.find((d) => cle(d.Nom) === cle(i.nom));

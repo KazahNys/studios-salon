@@ -12,7 +12,7 @@ module.exports = async (req, res) => {
     if (!confId || refuses.length) return res.status(400).json({ erreur: "Requête incomplète ou champ non modifiable" });
     if (req.method === "POST") {
       if (!valeurs.Nom) return res.status(400).json({ erreur: "Nom obligatoire" });
-      const p = await creer(INTERS, { ...valeurs, Code: code, Conférence: confId, Présent: true, "Ajouté sur place": true, Ordre: 50 });
+      const p = await creer(INTERS, { ...valeurs, "Code conf": code, Conférence: confId, Présent: true, "Ajouté sur place": true, Ordre: 50 });
       await aRefaire(confId);
       return res.json({ ok: true, id: p.id });
     }

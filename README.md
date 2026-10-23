@@ -37,3 +37,7 @@ Présent, Ajouté sur place, Notes opérateur, Statut montage, Monté par/le, et
 ## Vérifications
 
 `outils/importer.py` (Python) et `regles.js` (JS) appliquent les mêmes règles : comparer leurs sorties après toute modification d'une règle.
+
+## Tests
+
+`node tests/import.test.js && node tests/acces.test.js` — faux Notion en mémoire qui refuse, comme le vrai, un champ envoyé avec le mauvais type.

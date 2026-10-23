@@ -14,13 +14,14 @@ module.exports = async (req, res) => {
       const filtre = { property: "Retiré du programme", checkbox: { equals: false } };
       const parSalon = req.query.salon ? { and: [filtre, { property: "Salon", select: { equals: req.query.salon } }] } : filtre;
       const [confs, inters] = await Promise.all([tout(CONFS, parSalon), tout(INTERS, filtre)]);
-      const parCode = {};
-      for (const i of inters.map(lire)) (parCode[i.Code] ||= []).push(i);
+      const parConf = {};
+      // Rattachés par le lien Notion vers leur conférence (un même code peut exister dans deux salons).
+      for (const i of inters.map(lire)) for (const id of i["Conférence"] || []) (parConf[id] ||= []).push(i);
       // ponytail: filtre de lecture seulement ; un opérateur pourrait écrire hors de ses salles via l'API, à ajouter si besoin.
       const visibles = confs.map(lire).filter((c) => moi.role === "Monteur" || moi.salles.includes(c["Théâtre"]));
       const liste = visibles.map((c) => ({
         ...c,
-        intervenants: (parCode[c.Code] || []).sort((a, b) => (a.Ordre ?? 99) - (b.Ordre ?? 99)),
+        intervenants: (parConf[c.id] || []).sort((a, b) => (a.Ordre ?? 99) - (b.Ordre ?? 99)),
       }));
       liste.sort((a, b) => (a.Date + a.Début + a.Code).localeCompare(b.Date + b.Début + b.Code));
       return res.json({ moi, conferences: liste });
