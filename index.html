@@ -15,6 +15,8 @@
   header { position: sticky; top: 0; z-index: 2; background: var(--fond); padding: 12px 16px 8px; border-bottom: 1px solid var(--ligne); }
   h1 { font-size: 18px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   h1 small { font-weight: 400; color: var(--gris); font-size: 14px; }
+  #lien-import { font-size: 14px; font-weight: 600; color: #fff; background: var(--violet); padding: 6px 12px; border-radius: 8px; text-decoration: none; margin-right: 8px; }
+  .vide a { color: #c9a3e6; }
   main { padding: 12px 16px 80px; max-width: 760px; margin: 0 auto; }
   .filtres { display: flex; flex-wrap: wrap; gap: 6px; }
   select, input, textarea, button { font: inherit; color: inherit; }
@@ -61,7 +63,7 @@
 
 <div id="app" hidden>
   <header>
-    <h1>Studio S <small id="qui"></small></h1>
+    <h1>Studio S <span><a id="lien-import" href="import.html" hidden>Importer l'Excel</a> <small id="qui"></small></span></h1>
     <div class="filtres">
       <select id="f-salon" aria-label="Salon"></select>
       <select id="f-jour" aria-label="Jour"></select>
@@ -106,6 +108,8 @@ async function api(chemin, methode = "GET", corps) {
 
 async function charger() {
   try { ({ moi, conferences: confs } = await api("conferences")); } catch (e) { return dire(e.message, true); }
+  $("#lien-import").hidden = moi.role !== "Monteur";
+  $("#f-salon").hidden = !confs.length;
   $("#qui").textContent = moi.prenom + " · " + (moi.role === "Monteur" ? "monteur" : moi.salles.map((s) => s.replace("Salle de conférences ", "")).join(", "));
   remplirFiltres(); afficher();
 }
@@ -139,7 +143,10 @@ function afficher() {
   const q = $("#f-cherche").value.trim().toLowerCase();
   const liste = confs.filter((c) => c.Salon === salon && (!jour || c.Date === jour) && (!theatre || c["Théâtre"] === theatre)
     && (!q || (c.Code + " " + c.Titre).toLowerCase().includes(q)));
-  $("#liste").innerHTML = liste.length ? liste.map(carte).join("") : `<p class="vide">Aucune conférence pour ces filtres.</p>`;
+  $("#liste").innerHTML = liste.length ? liste.map(carte).join("")
+    : !confs.length && moi.role === "Monteur" ? `<p class="vide">Aucune conférence pour l'instant.<br><a href="import.html">Importer l'Excel du salon →</a></p>`
+    : !confs.length ? `<p class="vide">Aucune conférence pour l'instant : le programme n'a pas encore été importé.</p>`
+    : `<p class="vide">Aucune conférence pour ces filtres.</p>`;
 }
 
 function carte(c) {

@@ -20,6 +20,7 @@
 </head>
 <body>
 <main>
+  <p><a href="./" style="color:#c9a3e6">← Retour aux conférences</a></p>
   <h1>Import de l'Excel du salon</h1>
   <p>Relançable autant de fois que nécessaire : on met à jour ce qui vient de l'Excel, on ne touche jamais aux présences, ajouts, remarques, statuts de montage ni aux titres corrigés à la main.</p>
   <label for="code">Code d'accès</label>
@@ -40,7 +41,7 @@
 <script src="regles.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
-try { $("#code").value = localStorage.getItem("code") || ""; } catch {}
+try { $("#code").value = localStorage.getItem("code") || ""; $("#prenom").value = localStorage.getItem("nom") || "Yanis"; } catch {}
 let confs = [];
 const ecrire = (t) => ($("#rapport").textContent = t);
 
